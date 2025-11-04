@@ -1,12 +1,12 @@
 // pages/index.js
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 
 export default function Home() {
-  const [imageUrl, setImageUrl] = useState('');
+  const [file, setFile] = useState(null);        // ← نمسك الـFile هنا
+  const [imageUrl, setImageUrl] = useState('');  // ← أو رابط صورة
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const fileRef = useRef(null);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -17,11 +17,8 @@ export default function Home() {
     try {
       const fd = new FormData();
 
-      // خذ الملف من حقل الرفع عبر الـ ref
-      const file = fileRef.current?.files?.[0] || null;
-
-      if (file) {
-        // لازم نمرر Blob/File فعلي + اسم الملف
+      if (file instanceof File) {
+        // نمرر File فعلي + الاسم
         fd.append('image_file', file, file.name);
       } else if (imageUrl && imageUrl.trim()) {
         fd.append('image_url', imageUrl.trim());
@@ -29,15 +26,12 @@ export default function Home() {
         throw new Error('Please choose a file or paste an image URL');
       }
 
-      // أرسل إلى API عندنا
       const r = await fetch('/api/remove-bg', { method: 'POST', body: fd });
       if (!r.ok) {
-        // حاول نقرأ نص الخطأ من السيرفر
         const txt = await r.text();
         throw new Error(txt || 'Remove.bg error');
       }
 
-      // استلم الصورة كـ PNG (بايتات)
       const ab = await r.arrayBuffer();
       const blob = new Blob([ab], { type: 'image/png' });
       const url = URL.createObjectURL(blob);
@@ -54,12 +48,16 @@ export default function Home() {
       <h1>Remove.bg Proxy – KidsZoneParty</h1>
 
       <form onSubmit={onSubmit}>
-        {/* رفع ملف (نستعمل ref) */}
+        {/* رفع ملف: نمسكه في state */}
         <div style={{ marginBottom: 8 }}>
-          <input type="file" accept="image/*" ref={fileRef} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+          />
         </div>
 
-        {/* إدخال رابط صورة (اختياري) */}
+        {/* أو رابط صورة */}
         <div style={{ marginBottom: 8 }}>
           <input
             style={{ width: '100%' }}
@@ -69,9 +67,7 @@ export default function Home() {
           />
         </div>
 
-        <button disabled={loading}>
-          {loading ? 'Processing…' : 'Process'}
-        </button>
+        <button disabled={loading}>{loading ? 'Processing…' : 'Process'}</button>
       </form>
 
       {error && (
