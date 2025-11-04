@@ -1,52 +1,77 @@
-import { useState } from 'react';
+// pages/api/remove-bg.js
+import formidable from 'formidable';
+import fs from 'fs';
 
-export default function Home() {
-  const [file, setFile] = useState(null);
-  const [imageUrl, setImageUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+export const config = {
+  api: {
+    bodyParser: false, // مهم جداً لأننا نستقبل multipart/form-data
+  },
+};
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true); setError(null); setResult(null);
-    try {
-      const fd = new FormData();
-      if (file) fd.append('image_file', file);
-      if (imageUrl) fd.append('image_url', imageUrl);
-      const r = await fetch('/api/remove-bg', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      setResult(url);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const apiKey = process.env.REMOVE_BG_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing REMOVE_BG_API_KEY' });
+  }
+
+  try {
+    // نفكّر الـ multipart باستخدام formidable
+    const { fields, files } = await new Promise((resolve, reject) => {
+      const form = formidable({ multiples: false });
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+
+    const imageUrl = (fields.image_url || '').toString().trim();
+
+    // نجهّز الفورم الذي سنرسله إلى remove.bg
+    const fd = new FormData();
+
+    if (imageUrl) {
+      fd.append('image_url', imageUrl);
+    } else if (files.image_file && files.image_file.filepath) {
+      const filePath = files.image_file.filepath;
+      const filename =
+        files.image_file.originalFilename || 'upload.png';
+      fd.append('image_file', fs.createReadStream(filePath), filename);
+    } else {
+      return res
+        .status(400)
+        .json({ error: 'Please provide image_file or image_url' });
     }
-  };
 
-  return (
-    <main style={{maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui'}}>
-      <h1>Remove.bg Proxy – KidsZoneParty</h1>
-      <p>Upload a photo or paste an image URL, then click Process.</p>
-      <form onSubmit={onSubmit}>
-        <div style={{marginBottom: 8}}>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0])} />
-        </div>
-        <div style={{marginBottom: 8}}>
-          <input style={{width: '100%'}} placeholder="Or image URL (https://...)" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
-        </div>
-        <button disabled={loading}> {loading ? 'Processing...' : 'Process'} </button>
-      </form>
-      {error && <pre style={{color:'crimson', whiteSpace:'pre-wrap'}}>{error}</pre>}
-      {result && (
-        <div style={{marginTop:16}}>
-          <h3>Result</h3>
-          <img src={result} style={{maxWidth:'100%', border:'1px solid #ddd'}} />
-          <p><a href={result} download="output.png">Download</a></p>
-        </div>
-      )}
-    </main>
-  )
+    // خيارات اختيارية (مثال: الحجم)
+    fd.append('size', 'auto');
+
+    // نرسل الطلب إلى remove.bg
+    const r = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': apiKey,
+      },
+      body: fd,
+    });
+
+    if (!r.ok) {
+      const text = await r.text();
+      return res.status(r.status).json({ error: text });
+    }
+
+    const ab = await r.arrayBuffer();
+    const buf = Buffer.from(ab);
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buf);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
 }
