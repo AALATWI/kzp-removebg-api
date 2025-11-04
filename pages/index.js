@@ -2,8 +2,7 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [file, setFile] = useState(null);        // ← نمسك الـFile هنا
-  const [imageUrl, setImageUrl] = useState('');  // ← أو رابط صورة
+  const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -17,13 +16,17 @@ export default function Home() {
     try {
       const fd = new FormData();
 
-      if (file instanceof File) {
-        // نمرر File فعلي + الاسم
-        fd.append('image_file', file, file.name);
+      // خذ الملف مباشرة من عنصر الإدخال
+      const input = document.getElementById('fileInput');
+      const f = input?.files?.[0] ?? null;
+
+      if (f && f instanceof File) {
+        // هنا مضمون أنه Blob حقيقي
+        fd.append('image_file', f, f.name);
       } else if (imageUrl && imageUrl.trim()) {
         fd.append('image_url', imageUrl.trim());
       } else {
-        throw new Error('Please choose a file or paste an image URL');
+        throw new Error('Please choose an image file or paste an image URL.');
       }
 
       const r = await fetch('/api/remove-bg', { method: 'POST', body: fd });
@@ -48,16 +51,14 @@ export default function Home() {
       <h1>Remove.bg Proxy – KidsZoneParty</h1>
 
       <form onSubmit={onSubmit}>
-        {/* رفع ملف: نمسكه في state */}
         <div style={{ marginBottom: 8 }}>
           <input
+            id="fileInput"                 // ← مهم
             type="file"
             accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
         </div>
 
-        {/* أو رابط صورة */}
         <div style={{ marginBottom: 8 }}>
           <input
             style={{ width: '100%' }}
@@ -70,9 +71,7 @@ export default function Home() {
         <button disabled={loading}>{loading ? 'Processing…' : 'Process'}</button>
       </form>
 
-      {error && (
-        <pre style={{ color: 'crimson', whiteSpace: 'pre-wrap' }}>{error}</pre>
-      )}
+      {error && <pre style={{ color: 'crimson', whiteSpace: 'pre-wrap' }}>{error}</pre>}
 
       {result && (
         <div style={{ marginTop: 16 }}>
