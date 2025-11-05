@@ -2,6 +2,7 @@
 import { useState } from 'react';
 
 export default function Home() {
+  const [file, setFile] = useState(null);       // <-- نمسك File هنا
   const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -16,13 +17,9 @@ export default function Home() {
     try {
       const fd = new FormData();
 
-      // خذ الملف مباشرة من عنصر الإدخال
-      const input = document.getElementById('fileInput');
-      const f = input?.files?.[0] ?? null;
-
-      if (f && f instanceof File) {
-        // هنا مضمون أنه Blob حقيقي
-        fd.append('image_file', f, f.name);
+      if (file && file instanceof File) {
+        // نضمن أنه File/Blob حقيقي
+        fd.append('image_file', file, file.name);
       } else if (imageUrl && imageUrl.trim()) {
         fd.append('image_url', imageUrl.trim());
       } else {
@@ -53,9 +50,9 @@ export default function Home() {
       <form onSubmit={onSubmit}>
         <div style={{ marginBottom: 8 }}>
           <input
-            id="fileInput"                 // ← مهم
             type="file"
             accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}  // <-- هنا نمسك الملف
           />
         </div>
 
@@ -72,7 +69,6 @@ export default function Home() {
       </form>
 
       {error && <pre style={{ color: 'crimson', whiteSpace: 'pre-wrap' }}>{error}</pre>}
-
       {result && (
         <div style={{ marginTop: 16 }}>
           <h3>Result</h3>
